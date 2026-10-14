@@ -84,7 +84,8 @@ def collect_patches(data: Path, max_patches: int, rng: random.Random):
             dx, dy = (x2 - x1) * m, (y2 - y1) * m
             crop = im[int(max(0, y1 - dy)) : int(min(H, y2 + dy)), int(max(0, x1 - dx)) : int(min(W, x2 + dx))]
             if crop.size:
-                patches[c].append(crop.copy())
+                # store small: big smoke boxes at full FASDD resolution are ~10 MB each
+                patches[c].append(resize_long(crop, 384).copy())
     return patches
 
 
@@ -235,7 +236,7 @@ def main():
     ap.add_argument("--data", type=Path, default=Path("~/datasets/daedalus_fire").expanduser())
     ap.add_argument("--n-paste", type=int, default=6000)
     ap.add_argument("--n-screen", type=int, default=3000)
-    ap.add_argument("--max-patches", type=int, default=3000, help="per class")
+    ap.add_argument("--max-patches", type=int, default=1500, help="per class")
     ap.add_argument("--long-side", type=int, default=1024)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--preview", type=int, default=0, help="only write N examples to preview_synthetic.jpg")

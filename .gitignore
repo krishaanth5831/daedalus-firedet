@@ -6,6 +6,7 @@ data/
 *.onnx
 *.engine
 preview_synthetic.jpg
-yolo11n.pt
+yolo26n.pt
 yolo*.pt
 !weights/*.pt
+*.log

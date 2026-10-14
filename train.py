@@ -32,7 +32,7 @@ def write_data_yaml(root: Path, synthetic: bool, out: Path) -> Path:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data-root", type=Path, default=Path("~/datasets/daedalus_fire").expanduser())
-    ap.add_argument("--model", default="yolo11n.pt", help="pretrained COCO checkpoint to start from")
+    ap.add_argument("--model", default="yolo26n.pt", help="pretrained COCO checkpoint to start from")
     ap.add_argument("--name", default="real")
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--epochs", type=int, default=40)
