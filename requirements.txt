@@ -1,0 +1,6 @@
+ultralytics>=8.4   # YOLO26 needs 8.4+
+opencv-python
+pyarrow        # only for scripts/prepare_dfire.py
+onnx           # only for export
+onnxslim
+onnxruntime    # only to run exported .onnx models
