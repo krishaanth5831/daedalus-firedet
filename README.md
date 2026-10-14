@@ -19,12 +19,21 @@ Point the camera at a screen playing drone wildfire footage or at a printed aeri
 In the window: `conf` slider = threshold, `r` record, `s` snapshot, `f` fullscreen, `q` quit.
 The weights in `weights/daedalus_fire_n.pt` are used by default (about 5 MB, runs on CPU too).
 
+Full instructions (install, cameras, every option, retraining, export, troubleshooting): **[HOW_TO_RUN.md](HOW_TO_RUN.md)**.
+
 How to test it properly on the ground (screen replay with automatic scoring, printouts as
 simulated altitude, false-alarm hunting): see **[TESTING.md](TESTING.md)**.
 
 ## Model
 
-RESULTS_PLACEHOLDER
+YOLO26n (Ultralytics 8.4, 5.5 MB), fine-tuned from COCO at 640 px. Classes: `fire`, `smoke`.
+
+> **Status (2026-10-14): interim weights.** `weights/daedalus_fire_n.pt` is a snapshot from epoch 7 of 30 of the
+> real-data run (val mAP50 0.82, mAP50-95 0.52 on 1,500 real aerial val images). The final model and the
+> real-vs-synthetic A/B results on the held-out test splits replace this section when training finishes.
+
+Speed (measured on 1280×720 frames): 44 FPS PyTorch / 18 FPS ONNX on a Ryzen 7 8845HS **CPU**;
+30–40 FPS in `demo.py` on an RTX 1000 Ada laptop GPU while that GPU was also training.
 
 ## Data
 
