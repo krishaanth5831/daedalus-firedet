@@ -1,0 +1,5 @@
+ultralytics>=8.3
+opencv-python
+pyarrow        # only for scripts/prepare_dfire.py
+onnx           # only for export
+onnxslim
