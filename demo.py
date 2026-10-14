@@ -18,6 +18,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
+os.environ.setdefault("OPENCV_LOG_LEVEL", "ERROR")  # silence V4L2 probe warnings
 import cv2
 from ultralytics import YOLO
 
@@ -29,12 +30,11 @@ def list_cameras():
     by_id = sorted(glob.glob("/dev/v4l/by-id/*"))
     for p in by_id:
         print(f"{p}\n    -> {os.path.realpath(p)}")
-    if not by_id:
-        print("no /dev/v4l/by-id entries; trying indices 0-9")
-    for i in range(10):
-        cap = cv2.VideoCapture(i, cv2.CAP_V4L2)
+    print("\nopenable cameras (each USB cam usually has one video + one metadata node):")
+    for dev in sorted(glob.glob("/dev/video*"), key=lambda d: int(d[10:])):
+        cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
         if cap.isOpened() and cap.read()[0]:
-            print(f"index {i}: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
+            print(f"  --source {dev[10:]}   ({dev}, default {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))})")
         cap.release()
 
 
@@ -63,6 +63,7 @@ def main():
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--confirm", type=int, default=5, help="consecutive frames needed for the alarm banner")
+    ap.add_argument("--record", action="store_true", help="start recording to recordings/ immediately")
     ap.add_argument("--list-cameras", action="store_true")
     ap.add_argument("--device", default=None, help="cuda:0 / cpu (default: auto)")
     args = ap.parse_args()
@@ -83,6 +84,7 @@ def main():
 
     out_dir = Path("recordings")
     writer, streak, fs = None, 0, False
+    start_recording = args.record
     times = deque(maxlen=30)
     while True:
         ok, frame = cap.read()
@@ -100,10 +102,10 @@ def main():
             n_fire += c == 0
             n_smoke += c == 1
             x1, y1, x2, y2 = map(int, box)
-            cv2.rectangle(frame, (x1, y1), (x2, y2), COLOURS[c], 3)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), COLOURS.get(c, (0, 255, 0)), 3)
             label = f"{names[c]} {s:.2f}"
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-            cv2.rectangle(frame, (x1, y1 - th - 10), (x1 + tw + 8, y1), COLOURS[c], -1)
+            cv2.rectangle(frame, (x1, y1 - th - 10), (x1 + tw + 8, y1), COLOURS.get(c, (0, 255, 0)), -1)
             cv2.putText(frame, label, (x1 + 4, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
 
         streak = streak + 1 if (n_fire or n_smoke) else 0
@@ -116,6 +118,10 @@ def main():
         hud = f"{fps:4.1f} FPS  infer {infer_ms:4.0f} ms  conf {conf:.2f}  fire {n_fire}  smoke {n_smoke}"
         cv2.putText(frame, hud, (12, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
         cv2.putText(frame, hud, (12, H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        if start_recording:
+            out_dir.mkdir(exist_ok=True)
+            writer = cv2.VideoWriter(str(out_dir / f"demo_{datetime.now():%Y%m%d_%H%M%S}.mp4"), cv2.VideoWriter_fourcc(*"mp4v"), args.fps, (W, H))
+            start_recording = False
         if writer:
             writer.write(frame)
             cv2.circle(frame, (W - 30, 90), 10, (0, 0, 255), -1)
