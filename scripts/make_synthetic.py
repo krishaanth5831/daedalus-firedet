@@ -80,7 +80,7 @@ def collect_patches(data: Path, max_patches: int, rng: random.Random):
             c, x1, y1, x2, y2 = to_xyxy(b, W, H)
             if len(patches[c]) >= max_patches or (x2 - x1) < 12 or (y2 - y1) < 12:
                 continue
-            m = 0.12  # context margin so the feathered edge fades into real surroundings
+            m = 0.05  # small margin so the mask's feathered edge does not clip the flame
             dx, dy = (x2 - x1) * m, (y2 - y1) * m
             crop = im[int(max(0, y1 - dy)) : int(min(H, y2 + dy)), int(max(0, x1 - dx)) : int(min(W, x2 + dx))]
             if crop.size:
@@ -89,16 +89,32 @@ def collect_patches(data: Path, max_patches: int, rng: random.Random):
 
 
 def soft_mask(h, w, cls, patch):
-    """Feathered elliptical alpha; for fire, also weight by brightness so flames dominate."""
+    """Alpha for pasting. Fire: only flame-coloured pixels. Smoke: soft ellipse weighted by greyness.
+
+    Pasting the whole box drags the source background along (a dark oval around the
+    flame), which the model could learn as a shortcut, so the mask follows the content.
+    """
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     d = ((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2
-    a = np.clip((1.15 - d) / 0.45, 0, 1)
+    ellipse = np.clip((1.3 - d) / 0.6, 0, 1)
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
+    hue, sat, val = (hsv[..., i].astype(np.float32) for i in range(3))
     if cls == FIRE:
-        v = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)[..., 2].astype(np.float32) / 255
-        a = a * np.clip(0.35 + v, 0, 1)
+        flame = ((hue <= 35) | (hue >= 170)) & (sat > 70) & (val > 110) | (val > 235)
+        a = flame.astype(np.float32)
+        if a.mean() < 0.03:  # no clear flame pixels (e.g. smouldering): fall back to brightness
+            a = np.clip(val / 255 - 0.2, 0, 1)
+        a = cv2.dilate(a, np.ones((3, 3), np.uint8)) * ellipse
     else:
-        a = a * 0.85
-    return cv2.GaussianBlur(a, (0, 0), max(1.0, min(h, w) / 12))[..., None]
+        a = ellipse * np.clip(1.2 - sat / 255 * 1.5, 0, 1) * 0.85
+    return cv2.GaussianBlur(a, (0, 0), max(0.8, min(h, w) / 25))[..., None]
+
+
+def looks_like_sky(region):
+    """Blue or bright washed-out region: fires do not sit there."""
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV).reshape(-1, 3).astype(np.float32)
+    h, s, v = hsv[:, 0].mean(), hsv[:, 1].mean(), hsv[:, 2].mean()
+    return (90 <= h <= 130 and s > 35 and v > 110) or (v > 190 and s < 35)
 
 
 def jitter_colour(patch, rng):
@@ -122,13 +138,20 @@ def paste_one(bg, patches, rng):
             p = cv2.flip(p, 1)
         # aerial fires are mostly small: bias towards 2-15 % of image width
         target_w = W * min(0.4, rng.lognormvariate(np.log(0.07), 0.6))
-        s = target_w / p.shape[1]
+        s = min(2.0, target_w / p.shape[1])  # upscaling tiny crops further just makes blur
         pw, ph = max(8, int(p.shape[1] * s)), max(8, int(p.shape[0] * s))
         if pw >= W or ph >= H:
             continue
-        p = jitter_colour(cv2.resize(p, (pw, ph), interpolation=cv2.INTER_AREA), rng)
+        p = jitter_colour(cv2.resize(p, (pw, ph), interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_LINEAR), rng)
         a = soft_mask(ph, pw, cls, p)
-        x, y = rng.randint(0, W - pw), rng.randint(0, H - ph)
+        # pick a spot on the ground: the patch's lower part must not be sky
+        for _ in range(15):
+            x, y = rng.randint(0, W - pw), rng.randint(0, H - ph)
+            base = bg[y + ph * 2 // 3 : y + ph, x : x + pw]
+            if base.size and not looks_like_sky(base):
+                break
+        else:
+            continue
         roi = out[y : y + ph, x : x + pw]
         out[y : y + ph, x : x + pw] = roi * (1 - a) + p.astype(np.float32) * a
         # box = region where the mask is clearly visible, not the whole padded patch
