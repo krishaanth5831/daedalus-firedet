@@ -147,6 +147,7 @@ Train and compare:
 ```bash
 python train.py --name real                       # real images only
 python train.py --name synth --synthetic          # real + synthetic
+python scripts/make_test_screen.py            # held-out "filmed off a screen" test split
 python evaluate.py runs/real/weights/best.pt runs/synth/weights/best.pt
 cp runs/<winner>/weights/best.pt weights/daedalus_fire_n.pt
 ```
