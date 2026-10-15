@@ -30,8 +30,18 @@ YOLO26n (Ultralytics 8.4, 5.5 MB), fine-tuned from COCO at 640 px. Classes: `fir
 
 > **Status (2026-10-14): baseline weights.** `weights/daedalus_fire_n.pt` is the finished 30-epoch real-data model
 > (FASDD_UAV + D-Fire). Validation on 1,500 real aerial images: **mAP50 0.911**, mAP50-95 0.643
-> (fire: mAP50 0.857, precision 0.85, recall 0.79; smoke: mAP50 0.965). Not yet scored on the held-out test split.
+> (fire: mAP50 0.857, precision 0.85, recall 0.79; smoke: mAP50 0.965).
 > The real + synthetic A/B run is training; if it wins on the test split, it replaces these weights.
+
+Held-out test results (real images never used for training, `python evaluate.py`):
+
+| Test split | Images | mAP50 | mAP50-95 | Fire AP50 | Smoke AP50 | Precision | Recall |
+|---|---|---|---|---|---|---|---|
+| FASDD_UAV test (aerial) | 4,181 | **0.910** | 0.640 | 0.858 | 0.963 | 0.884 | 0.845 |
+| D-Fire test subset (ground level) | 1,000 | 0.703 | 0.381 | 0.614 | 0.791 | 0.710 | 0.649 |
+
+Aerial views, which is what the drone sees, are strong. Ground-level photos are weaker, so for the demo,
+show it aerial or high-vantage wildfire images.
 
 Speed (measured on 1280×720 frames): 44 FPS PyTorch / 18 FPS ONNX on a Ryzen 7 8845HS **CPU**;
 30–40 FPS in `demo.py` on an RTX 1000 Ada laptop GPU while that GPU was also training.
