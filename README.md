@@ -28,9 +28,34 @@ simulated altitude, false-alarm hunting): see **[TESTING.md](TESTING.md)**.
 
 YOLO26n (Ultralytics 8.4, 5.5 MB), fine-tuned from COCO at 640 px. Classes: `fire`, `smoke`.
 
-> **Status (2026-10-14): interim weights.** `weights/daedalus_fire_n.pt` is a snapshot from epoch 7 of 30 of the
-> real-data run (val mAP50 0.82, mAP50-95 0.52 on 1,500 real aerial val images). The final model and the
-> real-vs-synthetic A/B results on the held-out test splits replace this section when training finishes.
+`weights/daedalus_fire_n.pt` (2026-10-15) is the **real + synthetic** model: 30 epochs on FASDD_UAV + D-Fire +
+6,000 copy-paste + 3,000 "screen photo" synthetic images.
+
+### A/B test: did synthetic data help?
+
+Two models, same settings (30 epochs, 640 px, batch 32), one with synthetic data, one without.
+Scored on held-out test images that neither model trained on (`python evaluate.py`):
+
+| Test split | Images | Real only mAP50 / mAP50-95 | **Real + synthetic** mAP50 / mAP50-95 |
+|---|---|---|---|
+| FASDD_UAV test (aerial, clean) | 4,181 | 0.910 / 0.640 | **0.912** / 0.638 |
+| D-Fire test subset (ground level, clean) | 1,000 | 0.703 / 0.381 | 0.702 / 0.382 |
+| Aerial test "filmed off a screen" (`test_screen`) | 1,500 | 0.779 / 0.492 | **0.862 / 0.580** |
+
+- On clean photos it is a **tie** (all differences ≤ 0.002, i.e. noise). The copy-paste fires did not add accuracy on real aerial images.
+- On images that look like a camera filmed them off a monitor (the ground-demo condition), the synthetic model is
+  much better: +0.08 mAP50, and recall goes from 0.68 to 0.78.
+  Caveat: `test_screen` uses the same kind of degradation as the synthetic training data
+  (different images and random seed), so this probably **overstates** the real gain. The honest test is
+  `screen_replay.py` with the real camera filming a real monitor (see TESTING.md).
+
+Per class, real + synthetic model on the aerial test: fire AP50 0.861, smoke AP50 0.963, precision 0.889, recall 0.844.
+
+Image-level ("would the alarm go off?"), `screen_replay.py --direct --n 100` on held-out aerial test images:
+**97.9 %** of fire/smoke images flagged, **0 %** false alarms on the 52 no-fire images.
+
+Aerial views, which is what the drone sees, are strong. Ground-level photos are weaker, so for the demo,
+show it aerial or high-vantage wildfire images.
 
 Speed (measured on 1280×720 frames): 44 FPS PyTorch / 18 FPS ONNX on a Ryzen 7 8845HS **CPU**;
 30–40 FPS in `demo.py` on an RTX 1000 Ada laptop GPU while that GPU was also training.
@@ -39,7 +64,7 @@ Speed (measured on 1280×720 frames): 44 FPS PyTorch / 18 FPS ONNX on a Ryzen 7 
 
 | Source | What | Used for | License |
 |---|---|---|---|
-| [FASDD_UAV](https://doi.org/10.57760/sciencedb.j00104.00103) (via HF mirror `hanvithSai/gavin-fasdd-uav-raw`) | 25,097 UAV / high-vantage images, fire + smoke boxes, ~37 % no-fire | train / val / **test (official split, untouched)** | CC BY 4.0 |
+| [FASDD_UAV](https://doi.org/10.57760/sciencedb.j00104.00103) (via HF mirror `hanvithSai/gavin-fasdd-uav-raw`) | 25,097 UAV / high-vantage images, fire + smoke boxes, ~48 % no-fire | train / val / **test (official split, untouched)** | CC BY 4.0 |
 | [D-Fire](https://github.com/gaiasd/DFireDataset) (via HF mirror `badsaarow/d-fire`) | ground-level fire/smoke; 4,000 train + 1,000 test sampled | train + `test_ground` | see upstream |
 | Synthetic copy-paste (`scripts/make_synthetic.py`) | real FASDD fire/smoke cut-outs pasted onto no-fire aerial scenes | train only | derived from FASDD |
 | Synthetic "screen photo" (`scripts/make_synthetic.py`) | real train images made to look filmed off a monitor (tilt, bezel, moiré, glare, blur, JPEG) | train only | derived |
@@ -69,6 +94,7 @@ python scripts/make_synthetic.py
 # 2. train (A/B: with and without synthetic) and score on the real test splits
 python train.py --name real
 python train.py --name synth --synthetic
+python scripts/make_test_screen.py            # held-out "filmed off a screen" test split
 python evaluate.py runs/real/weights/best.pt runs/synth/weights/best.pt
 
 # 3. export for the onboard computer once it is chosen

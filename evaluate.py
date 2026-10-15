@@ -5,6 +5,7 @@
 Splits:
 - test        : official FASDD_UAV test split (aerial, never trained on)
 - test_ground : D-Fire test subset (ground-level), if prepared
+- test_screen : test images made to look filmed off a monitor (scripts/make_test_screen.py)
 """
 import argparse
 import json
@@ -21,7 +22,7 @@ def main():
     args = ap.parse_args()
 
     results = {}
-    for split in ("test", "test_ground"):
+    for split in ("test", "test_ground", "test_screen"):
         if not (args.data_root / "images" / split).exists():
             continue
         yaml = Path("runs") / f"eval_{split}.yaml"
